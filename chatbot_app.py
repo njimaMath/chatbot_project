@@ -4,7 +4,8 @@ import requests
 # =========================
 # 1. Hugging Face API 設定
 # =========================
-HF_API_URL = "https://api-inference.huggingface.co/models/HuggingFaceH4/zephyr-7b-beta"
+HF_API_URL = "https://router.huggingface.co/hf-inference/models/HuggingFaceH4/zephyr-7b-beta"
+
 HF_HEADERS = {
     "Authorization": f"Bearer {st.secrets['hf_api_token']}",
     "Content-Type": "application/json",
