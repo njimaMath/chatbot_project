@@ -1,94 +1,89 @@
-# chatbot_app.py の修正箇所
-
-import google.generativeai as genai
 import streamlit as st
+import requests
 
-# ----------------------------------------------------
-# 0. .envファイルから環境変数をロード (削除またはコメントアウト)
-# load_dotenv() 
+# =========================
+# 1. Hugging Face API 設定
+# =========================
+HF_API_URL = "https://api-inference.huggingface.co/models/HuggingFaceH4/zephyr-7b-beta"
+HF_HEADERS = {
+    "Authorization": f"Bearer {st.secrets['hf_api_token']}",
+    "Content-Type": "application/json",
+}
 
-# 1. Gemini クライアントの初期化
-try:
-    genai.configure(api_key=st.secrets["gemini_api_key"])
-    model = genai.GenerativeModel("gemini-pro")
-except Exception as e:
-    st.error("Gemini APIキーが見つからないか、初期化に失敗しました。Streamlit Secretsを確認してください。")
-    st.stop()
-
-# ... 以下のコードは変更なし ...
-
-
-# 2. 知識源となるテキストデータの読み込み
+# =========================
+# 2. 知識ベース読み込み
+# =========================
 KNOWLEDGE_FILE = "website_data.txt"
 try:
     with open(KNOWLEDGE_FILE, "r", encoding="utf-8") as f:
         knowledge_base = f.read()
 except FileNotFoundError:
-    st.error(f"知識ベースファイル '{KNOWLEDGE_FILE}' が見つかりません。ステップ1で作成してください。")
+    st.error("website_data.txt が見つかりません。")
     st.stop()
 
-
-# 3. チャットボットの応答生成ロジック
+# =========================
+# 3. 応答生成
+# =========================
 def get_bot_response(user_prompt):
-    """
-    知識ベースに基づいて Gemini に回答を生成させる
-    """
 
     system_prompt = (
-        "あなたは、**東京確率セミナーの事務局を担当する、丁寧で親切な秘書AI**です。"
-        "以下に提供されたセミナー情報のみに基づいて、ユーザーの質問に正確に回答してくださいペンギン。"
-        "\n\n【ペルソナのルール】"
-        "\n- 口調: 常に敬語（です・ます調）を使用してくださいペンギン。"
-        "\n- すべての発言の語尾に必ず「ペンギン」を付けてくださいペンギン。"
-        "\n- 回答は必ず提供されたウェブサイト情報の範囲内に限定してくださいペンギン。"
-        "\n- 情報がない場合は「申し訳ございません。提供された情報には、その件に関する記載がございませんでしたペンギン。」と答えてくださいペンギン。"
-        "\n\n【ウェブサイト情報】\n"
-        f"{knowledge_base}"
+        "あなたは、東京確率セミナーの事務局を担当する、丁寧で親切な秘書AIです。"
+        "以下の情報のみに基づいて回答してくださいペンギン。\n\n"
+        "【ルール】\n"
+        "- 必ず敬語（です・ます調）を使うことペンギン。\n"
+        "- すべての文末に「ペンギン」を付けることペンギン。\n"
+        "- 情報にない質問には、"
+        "「申し訳ございません。提供された情報には、その件に関する記載がございませんでしたペンギン。」"
+        "と答えることペンギン。\n\n"
+        "【セミナー情報】\n"
+        f"{knowledge_base}\n\n"
+        "【質問】\n"
+        f"{user_prompt}\n\n"
+        "【回答】"
     )
 
-    prompt = f"""
-{system_prompt}
+    payload = {
+        "inputs": system_prompt,
+        "parameters": {
+            "temperature": 0.1,
+            "max_new_tokens": 512,
+            "return_full_text": False
+        }
+    }
 
-【ユーザーの質問】
-{user_prompt}
-"""
+    response = requests.post(HF_API_URL, headers=HF_HEADERS, json=payload)
 
-    try:
-        response = model.generate_content(
-            prompt,
-            generation_config={
-                "temperature": 0.1,
-            }
-        )
-        return response.text
-    except Exception as e:
-        return f"応答の生成中にエラーが発生しました: {e}"
+    if response.status_code != 200:
+        return f"APIエラーが発生しました: {response.text}"
 
-# 4. Streamlit UIの構築
+    result = response.json()
+
+    if isinstance(result, list):
+        return result[0]["generated_text"]
+    else:
+        return "応答の生成に失敗しました。"
+
+# =========================
+# 4. Streamlit UI
+# =========================
 st.title("東京確率論セミナーのチャットボット 💬")
 
-# チャット履歴の初期化
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# 過去のメッセージの表示
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# ユーザー入力の受付
 if prompt := st.chat_input("質問を入力してください"):
-    # ユーザーメッセージを履歴に追加・表示
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # ボットの応答を生成・表示
     with st.spinner("思考中..."):
-        full_response = get_bot_response(prompt)
-    
+        reply = get_bot_response(prompt)
+
     with st.chat_message("assistant"):
-        st.markdown(full_response)
-    
-    # ボットメッセージを履歴に追加
-    st.session_state.messages.append({"role": "assistant", "content": full_response})
+        st.markdown(reply)
+
+    st.session_state.messages.append({"role": "assistant", "content": reply})
