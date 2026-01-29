@@ -73,7 +73,7 @@ def speak(text):
     except Exception as e:
         st.warning(f"音声再生に失敗しました: {e}")
 
-st.image("penguin_body.png", width=300)
+st.image("penguin_body.png", width=100)
 
 
 # ----------------------------------------------------
