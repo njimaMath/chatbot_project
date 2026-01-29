@@ -50,6 +50,32 @@ def get_bot_response(user_prompt):
     except Exception as e:
         return f"応答の生成中にエラーが発生しました: {e}"
 
+import tempfile
+from pathlib import Path
+
+def speak(text):
+    """
+    OpenAI TTSで音声生成して再生
+    """
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp:
+            audio_path = Path(tmp.name)
+
+        with client.audio.speech.with_streaming_response.create(
+            model="gpt-4o-mini-tts",
+            voice="alloy",   # 落ち着いた秘書系ボイス
+            input=text,
+        ) as response:
+            response.stream_to_file(audio_path)
+
+        st.audio(str(audio_path), autoplay=True)
+
+    except Exception as e:
+        st.warning(f"音声再生に失敗しました: {e}")
+
+st.image("penguin_body.png", width=100)
+
+
 # ----------------------------------------------------
 # Streamlit UI
 st.title("東京確率論セミナーのチャットボット 💬")
